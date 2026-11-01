@@ -52,6 +52,10 @@ jobs:
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
         GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN }}
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
+        # 仅对有账号的域名签到（仓库变量，非 secret）；默认 glados.cloud,railgun.info
+        GLADOS_DOMAINS: ${{ vars.GLADOS_DOMAINS }}
+        # 签到 UA 平台，需匹配 GLaDOS 登录设备平台（仓库变量，非 secret）；默认 Linux
+        GLADOS_UA_PLATFORM: ${{ vars.GLADOS_UA_PLATFORM }}
 
     - name: Keep alive
       uses: liskin/gh-workflow-keepalive@v1 
