@@ -57,6 +57,18 @@
 
 > 不配置时默认不进行自动兑换；如需兑换，设置 `GLADOS_EXCHANGE_PLAN` 为 `plan100` / `plan200` / `plan500`。
 
+#### 3.2.1 GLADOS_DOMAINS（非必填）
+
+指定要签到的域名列表（逗号分隔），默认 `glados.cloud,railgun.info`。
+
+> 若你只有 GLaDOS 主站账号（无 railgun.info 账号），建议设置 `GLADOS_DOMAINS` 为 `glados.cloud`，避免无账号域名导致误报签到失败。
+
+#### 3.2.2 GLADOS_UA_PLATFORM（非必填）
+
+指定签到请求的 User-Agent 平台（`Windows` / `macOS` / `Linux` / `iPhone` / `Android`），默认 `Linux`。
+
+> 需与 GLaDOS 登录设备平台一致；不一致时脚本会自动按服务端 `loginDevice` 切换 UA 重试。若自动重试仍失败，可显式设置此变量。
+
 #### 3.3 手机推送（非必填）
 
 支持多个推送后端，可在 `Settings`→`Secrets and variables`→`Action` 中按需配置，**任一后端配置后即会推送，支持同时配置多个（都发）**：
@@ -74,6 +86,7 @@
 - **2026-04**: 优化代码逻辑与日志输出，支持[新版域名](https://railgun.info)，在 `GLADOS_COOKIES` 中添加新版域名下的 cookies 即可使用。
 - **2026-09**: 设备平台自适应重试（无需手动配置 UA 即可自动恢复签到）；网络层自动重试与退避，降低 CI 网络抖动导致的误报失败；日志时间统一为北京时间，定时任务调整为北京时间每天 2 次并避开整点高峰；默认关闭自动兑换，需显式配置后才启用。
 - **2026-10**: 日志级别短标签 `[I]/[W]/[E]` ；推送兼容 Server酱（策略模式多后端「都发」），新增 `requirements.txt` 。
+- **2026-11**: 修复签到失败被 CI 掩盖的缺陷（失败时退出码置 1）；默认 UA 由 Windows 改为 Linux（可 `GLADOS_UA_PLATFORM` 覆盖），避免 `device-mismatch` 导致签到失败；新增 `GLADOS_DOMAINS` 支持仅对有账号的域名签到。
 
 ## 问题排查与定位
 

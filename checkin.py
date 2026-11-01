@@ -102,6 +102,7 @@ class Config:
     ENV_COOKIES = "GLADOS_COOKIES"
     ENV_EXCHANGE_PLAN = "GLADOS_EXCHANGE_PLAN"
     ENV_VERBOSE = "GLADOS_VERBOSE"
+    ENV_DOMAINS = "GLADOS_DOMAINS"
 
     """默认兑换计划（none 表示不自动兑换）"""
     DEFAULT_EXCHANGE_PLAN = "none"
@@ -125,6 +126,7 @@ class Config:
         self.cookies_list: List[str] = []
         self.exchange_plan: str = self.DEFAULT_EXCHANGE_PLAN
         self.verbose: bool = self.DEFAULT_VERBOSE
+        self.domains: List[str] = list(self.DOMAINS)
         self._load_config()
 
     def _load_config(self) -> None:
@@ -134,6 +136,7 @@ class Config:
         raw_cookies_env: Optional[str] = os.environ.get(self.ENV_COOKIES)
         exchange_plan_env: Optional[str] = os.environ.get(self.ENV_EXCHANGE_PLAN)
         verbose_env: Optional[str] = os.environ.get(self.ENV_VERBOSE)
+        domains_env: Optional[str] = os.environ.get(self.ENV_DOMAINS)
 
         if not push_key_env:
             logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_PUSH_KEY}' 未设置。")
@@ -180,6 +183,18 @@ class Config:
                 logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_VERBOSE}' 的值 '{verbose_env}' 无效，将使用默认值 {self.DEFAULT_VERBOSE}。")
 
         logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_VERBOSE}: {self.verbose}。")
+
+        # 可通过 GLADOS_DOMAINS 覆盖默认域名列表（逗号分隔），
+        # 仅对有账号的域名签到，避免无账号域名误报失败
+        if domains_env:
+            self.domains = [d.strip() for d in domains_env.split(",") if d.strip()]
+            if not self.domains:
+                logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_DOMAINS}' 的值 '{domains_env}' 无效，使用默认域名。")
+                self.domains = list(self.DOMAINS)
+            else:
+                logger.info(f"{LogEmoji.INFO} 使用自定义域名: {', '.join(self.domains)}")
+        else:
+            logger.info(f"{LogEmoji.INFO} 使用默认域名: {', '.join(self.DOMAINS)}")
 
 
 # 各平台合法 User-Agent（版本号无关，仅平台 token 关键）
@@ -243,9 +258,15 @@ class API:
 
     def _get_headers(self) -> Dict[str, str]:
         """获取请求头"""
+        # 默认 UA 匹配 CI 运行环境（ubuntu-latest 常见 Linux 登录设备）。
+        # 若与登录设备平台不符，checkin() 会收到 code=4 device-mismatch，
+        # 并按 loginDevice 自动切换到 PLATFORM_UA 对应平台重试。
+        # 可通过环境变量 GLADOS_UA_PLATFORM 覆盖（Windows/macOS/Linux/iPhone/Android）。
+        platform = os.environ.get("GLADOS_UA_PLATFORM", "Linux")
+        default_ua = PLATFORM_UA.get(platform, PLATFORM_UA["Linux"])
         return {
             "origin": f"https://{self.domain}",
-            "user-agent": PLATFORM_UA["Windows"],
+            "user-agent": default_ua,
         }
 
     def _log(self, level: str, emoji: str, message: str, force: bool = False) -> None:
@@ -597,7 +618,7 @@ class Checker:
     def checkin_all(self):
         """执行所有签到任务"""
         cookie_count = len(self.config.cookies_list)
-        domain_count = len(self.config.DOMAINS)
+        domain_count = len(self.config.domains)
         total_tasks = cookie_count * domain_count
         task_idx = 0
 
@@ -606,7 +627,7 @@ class Checker:
         for cookie_idx, cookie in enumerate(self.config.cookies_list, 1):
             logger.info(f"{LogEmoji.START} ========== 开始处理 Cookie {cookie_idx} ==========")
 
-            for domain in self.config.DOMAINS:
+            for domain in self.config.domains:
                 task_idx += 1
                 logger.info(f"{LogEmoji.INFO} ----- 任务 {task_idx}/{total_tasks}: {LogEmoji.COOKIE}[{cookie_idx}] on {LogEmoji.DOMAIN}[{domain}] -----")
 
@@ -715,6 +736,11 @@ def main():
             logger.info(f"{LogEmoji.START} 步骤 3: 格式化结果")
             payload = checker.format_results()
             logger.info(f"\n{LogEmoji.END} ========== 签到总结 ==========\n{payload['title']}\n{render_payload(payload)}")
+
+            # 任一签到失败 → 非零退出码，让 CI 真实反映签到结果
+            if payload.get("fail", 0) > 0:
+                exit_code = 1
+                logger.warning(f"{LogEmoji.WARNING} 有 {payload['fail']} 个任务签到失败，退出码置为 1（CI 将标记失败）")
 
     except Exception as e:
         logger.error(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
